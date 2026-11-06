@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components import websocket_api
+from homeassistant.components import websocket_api, panel_custom
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -20,6 +21,8 @@ from .scanner import scan_photo_directory
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 WS_TYPE = f"{DOMAIN}/photos"
+WS_LIBRARY = f"{DOMAIN}/library"
+PANEL_PATH = "wallpanel-photo-library"
 
 
 @websocket_api.websocket_command({vol.Required("type"): WS_TYPE})
@@ -43,14 +46,56 @@ async def websocket_get_photos(hass: HomeAssistant, connection, msg) -> None:
     })
 
 
+
+@websocket_api.websocket_command({vol.Required("type"): WS_LIBRARY})
+@websocket_api.async_response
+async def websocket_photo_library(hass: HomeAssistant, connection, msg) -> None:
+    """Return indexed filenames and scan errors for the read-only library browser."""
+    entries = hass.data.get(DOMAIN, {})
+    if not entries:
+        connection.send_result(msg["id"], {"photos": [], "errors": [], "scan_status": "unavailable"})
+        return
+    data = next(iter(entries.values()))
+    summary = data.get("last_summary") or {}
+    connection.send_result(msg["id"], {
+        "photos": [
+            {"path": item["path"], "rating": item.get("rating", 0),
+             "orientation": item.get("orientation", "unknown"),
+             "issues": item.get("metadata_issues", [])}
+            for item in sorted(data["photos"].values(), key=lambda p: p["path"].casefold())
+        ],
+        "errors": summary.get("exceptions", []),
+        "scan_status": data.get("scan_status"),
+        "last_scan": data.get("last_scan"),
+        "scan_error": data.get("scan_error"),
+        "unreadable": summary.get("unreadable", 0),
+    })
+
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Register WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_photos)
+    websocket_api.async_register_command(hass, websocket_photo_library)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up scanner and diagnostic entities."""
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            "/wallpanel-photo-selector/photo-library.js",
+            str(Path(__file__).parent / "photo-library.js"),
+            cache_headers=False,
+        )
+    ])
+    await panel_custom.async_register_panel(
+        hass,
+        frontend_url_path=PANEL_PATH,
+        webcomponent_name="wallpanel-photo-library",
+        js_url="/wallpanel-photo-selector/photo-library.js",
+        sidebar_title="Photo Library",
+        sidebar_icon="mdi:image-multiple",
+        require_admin=True,
+    )
     media_path = Path(entry.options.get("media_path", entry.data.get("media_path", DEFAULT_MEDIA_PATH))).resolve()
     interval = int(entry.options.get("scan_interval", entry.data.get("scan_interval", DEFAULT_SCAN_INTERVAL)))
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
@@ -119,4 +164,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data["scan_task"].cancel()
     if not hass.data.get(DOMAIN):
         hass.data.pop(DOMAIN, None)
+        panel_custom.async_remove_panel(hass, PANEL_PATH)
     return unload_ok
