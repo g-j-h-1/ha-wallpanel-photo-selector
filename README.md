@@ -19,3 +19,9 @@ The integration indexes photos on startup and periodically thereafter. The **Wal
 ## Compatibility
 
 The frontend is installed separately through HACS as a Dashboard component from the original repository. This repository contains only the Home Assistant backend integration.
+
+## Browse photographs by rating and errors
+
+After restarting Home Assistant, open **Photo Library** in the sidebar. The read-only browser lists indexed JPEG filenames and their star ratings, with filters for **All**, **0–5 stars**, and **Errors**. Use the search box to find filenames or error messages. The Errors tab also lists unreadable JPEGs that could not be added to the index.
+
+The **Refresh list** button reloads the current index; to rescan the underlying directory, use the integration's **Rescan photos** button.
