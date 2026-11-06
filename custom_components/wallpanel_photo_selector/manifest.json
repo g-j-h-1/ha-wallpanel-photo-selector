@@ -1,0 +1,10 @@
+{
+  "domain": "wallpanel_photo_selector",
+  "name": "WallPanel Photo Selector",
+  "version": "1.1.2",
+  "documentation": "https://github.com/g-j-h-1/ha-wallpanel-photo-selector",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [],
+  "config_flow": true
+}
