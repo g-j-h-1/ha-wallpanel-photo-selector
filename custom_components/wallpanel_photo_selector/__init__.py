@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components import websocket_api, panel_custom
+from homeassistant.components import websocket_api, panel_custom, frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -19,6 +19,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, DEFAULT_MEDIA_PATH, DEFAULT_SCAN_INTERVAL, PLATFORMS
 from .scanner import scan_photo_directory
+from .recognition import setup_recognition
 
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
@@ -77,11 +78,6 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Register WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_photos)
     websocket_api.async_register_command(hass, websocket_photo_library)
-    return True
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up scanner and diagnostic entities."""
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/wallpanel-photo-selector/photo-library.js",
@@ -89,6 +85,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             cache_headers=False,
         )
     ])
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up scanner and diagnostic entities."""
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=PANEL_PATH,
@@ -110,6 +111,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "scan_task": None, "scan": None, "next_scan": None, "scheduler_active": False,
     }
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
+    setup_recognition(hass, entry, data)
+    entry.async_on_unload(entry.add_update_listener(_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     async def _scan(_now=None) -> None:
@@ -171,14 +174,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _options_updated(hass, entry):
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload integration and diagnostic entities."""
-    entry.async_unload()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
     data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if data and data.get("scan_task"):
         data["scan_task"].cancel()
     if not hass.data.get(DOMAIN):
         hass.data.pop(DOMAIN, None)
-        panel_custom.async_remove_panel(hass, PANEL_PATH)
+        frontend.async_remove_panel(hass, PANEL_PATH)
     return unload_ok
