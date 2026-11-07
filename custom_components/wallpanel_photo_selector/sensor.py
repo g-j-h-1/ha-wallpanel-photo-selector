@@ -127,4 +127,5 @@ class PhotoSelectorSensor(SensorEntity):
         }
 
     def _refresh(self):
-        self.async_write_ha_state()
+        """Marshal dispatcher updates onto the Home Assistant event loop."""
+        self.hass.add_job(self.async_write_ha_state)
