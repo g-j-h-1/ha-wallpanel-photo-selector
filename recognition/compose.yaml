@@ -1,0 +1,18 @@
+services:
+  recognition:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    environment:
+      RECOGNITION_TOKEN: ${RECOGNITION_TOKEN:?Set a random token in .env}
+      FACE_DISTANCE_THRESHOLD: "0.45"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+    volumes:
+      - ${PHOTO_EXPORT_DIRECTORY:?Set the JPEG export directory in .env}:/photos:ro
+      - face-index:/data
+    mem_limit: 3g
+    cpus: 2
+volumes:
+  face-index:

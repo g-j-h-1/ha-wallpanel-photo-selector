@@ -1,0 +1,21 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optional viewer recognition",
+        "description": "Leave the recognition URL blank to disable. The worker must see the same exported JPEG directory as this integration.",
+        "data": {
+          "recognition_url": "Recognition service URL (for example http://192.168.1.50:8099)",
+          "recognition_token": "Recognition service token",
+          "recognition_camera": "Viewer camera",
+          "recognition_person": "Person detected sensor"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Use an HTTP or HTTPS origin with no path, credentials, query or fragment.",
+      "invalid_token": "The token must contain at least 32 characters.",
+      "missing_entities": "Select both a camera and a person sensor."
+    }
+  }
+}

@@ -2,6 +2,15 @@
 
 Backend companion to [Lovelace WallPanel Photo Selector](https://github.com/g-j-h-1/lovelace-wallpanel-photo-selector). Scans local JPEGs under `/media`, reads star ratings and orientation, and exposes an indexed photo list to the WallPanel frontend.
 
+## Optional anonymous viewer recognition
+
+An optional local worker can match the Portal camera's faces against exported
+JPEGs without names or manual tagging. It remembers visitors for 15 minutes and
+boosts photo selection weights for photos containing them, with larger boosts
+for group photos. The full library remains available and the slideshow keeps
+advancing. Requires the matching frontend update and a separate recognition
+service. See [installation and behaviour](recognition/README.md).
+
 ## Install and update with HACS
 
 1. In HACS, open **Custom repositories** and add `https://github.com/g-j-h-1/ha-wallpanel-photo-selector` as type **Integration**.

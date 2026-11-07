@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 
 METRICS = (
+    ("viewer_match", "Viewer match", "mdi:face-recognition", None),
     ("scan_status", "Scan status", "mdi:database-check", None),
     ("last_scan", "Last scan", "mdi:clock-check", SensorDeviceClass.TIMESTAMP),
     ("next_scan", "Next scheduled scan", "mdi:calendar-clock", SensorDeviceClass.TIMESTAMP),
@@ -84,6 +85,8 @@ class PhotoSelectorSensor(SensorEntity):
         data, summary, photos, ratings, orientations = self._snapshot()
         if self.key == "scan_status":
             return data.get("scan_status", "unknown")
+        if self.key == "viewer_match":
+            return data.get("viewer", {}).get("status", "disabled")
         if self.key == "scheduler_status":
             return "active" if data.get("scheduler_active") else "inactive"
         if self.key == "next_scan":
@@ -111,6 +114,10 @@ class PhotoSelectorSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         data, summary, photos, ratings, orientations = self._snapshot()
+        if self.key == "viewer_match":
+            viewer = data.get("viewer", {})
+            return {"matches": viewer.get("matches", []), "expires_at": viewer.get("expires_at"),
+                    "visitor_count": viewer.get("viewer_count", 0), "memory_minutes": 15}
         return {
             "media_path": data.get("media_path"),
             "scan_interval_minutes": data.get("scan_interval"),
