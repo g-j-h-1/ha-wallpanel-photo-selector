@@ -15,6 +15,8 @@ from .const import DOMAIN
 METRICS = (
     ("scan_status", "Scan status", "mdi:database-check", None),
     ("last_scan", "Last scan", "mdi:clock-check", SensorDeviceClass.TIMESTAMP),
+    ("next_scan", "Next scheduled scan", "mdi:calendar-clock", SensorDeviceClass.TIMESTAMP),
+    ("scheduler_status", "Scheduler status", "mdi:timer-check", None),
     ("total", "Photos indexed", "mdi:image-multiple", None),
     ("discovered", "JPEG files detected", "mdi:file-image", None),
     ("landscape", "Landscape photos", "mdi:panorama", None),
@@ -82,6 +84,11 @@ class PhotoSelectorSensor(SensorEntity):
         data, summary, photos, ratings, orientations = self._snapshot()
         if self.key == "scan_status":
             return data.get("scan_status", "unknown")
+        if self.key == "scheduler_status":
+            return "active" if data.get("scheduler_active") else "inactive"
+        if self.key == "next_scan":
+            value = data.get("next_scan")
+            return datetime.fromisoformat(value) if value else None
         if self.key == "last_scan":
             value = data.get("last_scan")
             return datetime.fromisoformat(value) if value else None
