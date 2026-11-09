@@ -19,6 +19,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, DEFAULT_MEDIA_PATH, DEFAULT_SCAN_INTERVAL, PLATFORMS
 from .scanner import scan_photo_directory
+from .people_index import load_people_index
 
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
@@ -36,15 +37,24 @@ async def websocket_get_photos(hass: HomeAssistant, connection, msg) -> None:
         connection.send_result(msg["id"], {"photos": [], "last_scan": None})
         return
     data = next(iter(entries.values()))
+    people_index = await hass.async_add_executor_job(
+        load_people_index, Path(data["media_path"]), data["photos"]
+    )
     photos = [
-        {"path": item["path"], "rating": item.get("rating", 0),
-         "weight": max(1, int(item.get("rating", 0))),
-         "orientation": item.get("orientation", "unknown")}
+        {
+            "path": item["path"],
+            "rating": item.get("rating", 0),
+            "weight": max(1, int(item.get("rating", 0))),
+            "orientation": item.get("orientation", "unknown"),
+            "people": people_index.get(item["path"], []),
+        }
         for item in data["photos"].values()
     ]
     connection.send_result(msg["id"], {
-        "photos": photos, "media_folder": Path(data["media_path"]).name,
+        "photos": photos,
+        "media_folder": Path(data["media_path"]).name,
         "last_scan": data.get("last_scan"),
+        "people_indexed": len(people_index),
     })
 
 
