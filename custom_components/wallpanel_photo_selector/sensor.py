@@ -18,6 +18,10 @@ METRICS = (
     ("next_scan", "Next scheduled scan", "mdi:calendar-clock", SensorDeviceClass.TIMESTAMP),
     ("scheduler_status", "Scheduler status", "mdi:timer-check", None),
     ("total", "Photos indexed", "mdi:image-multiple", None),
+    ("people_index_status", "Immich index status", "mdi:account-search", None),
+    ("people_index_entries", "Immich index entries", "mdi:account-multiple", None),
+    ("people_indexed", "Photos matched to people", "mdi:account-check", None),
+    ("people_unmatched", "Immich entries unmatched", "mdi:account-question", None),
     ("discovered", "JPEG files detected", "mdi:file-image", None),
     ("landscape", "Landscape photos", "mdi:panorama", None),
     ("portrait", "Portrait photos", "mdi:crop-portrait", None),
@@ -92,6 +96,15 @@ class PhotoSelectorSensor(SensorEntity):
         if self.key == "last_scan":
             value = data.get("last_scan")
             return datetime.fromisoformat(value) if value else None
+        people = data.get("people_diagnostics") or {}
+        if self.key == "people_index_status":
+            return people.get("status", "pending")
+        if self.key == "people_index_entries":
+            return people.get("entries")
+        if self.key == "people_indexed":
+            return people.get("matched")
+        if self.key == "people_unmatched":
+            return people.get("unmatched")
         if self.key == "total":
             return len(photos)
         if self.key == "discovered":
@@ -113,6 +126,7 @@ class PhotoSelectorSensor(SensorEntity):
         data, summary, photos, ratings, orientations = self._snapshot()
         return {
             "media_path": data.get("media_path"),
+            "people_index_error": (data.get("people_diagnostics") or {}).get("error"),
             "scan_interval_minutes": data.get("scan_interval"),
             "last_scan_status": data.get("scan_status"),
             "last_scan_error": data.get("scan_error"),

@@ -19,7 +19,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN, DEFAULT_MEDIA_PATH, DEFAULT_SCAN_INTERVAL, PLATFORMS
 from .scanner import scan_photo_directory
-from .people_index import load_people_index
+from .people_index import load_people_index_diagnostics
 
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
@@ -37,9 +37,12 @@ async def websocket_get_photos(hass: HomeAssistant, connection, msg) -> None:
         connection.send_result(msg["id"], {"photos": [], "last_scan": None})
         return
     data = next(iter(entries.values()))
-    people_index = await hass.async_add_executor_job(
-        load_people_index, Path(data["media_path"]), data["photos"]
+    people_index, diagnostics = await hass.async_add_executor_job(
+        load_people_index_diagnostics, Path(data["media_path"]), data["photos"]
     )
+    if diagnostics != data.get("people_diagnostics"):
+        data["people_diagnostics"] = diagnostics
+        async_dispatcher_send(hass, f"{DOMAIN}_updated_{data['entry_id']}")
     photos = [
         {
             "path": item["path"],
@@ -118,6 +121,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "last_summary": cached.get("last_summary"), "scan_status": "starting",
         "scan_error": None, "store": store, "lock": asyncio.Lock(),
         "scan_task": None, "scan": None, "next_scan": None, "scheduler_active": False,
+        "entry_id": entry.entry_id, "people_diagnostics": None,
     }
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = data
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -133,6 +137,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     scan_photo_directory, media_path, data["photos"]
                 )
                 data["photos"] = photos
+                _, data["people_diagnostics"] = await hass.async_add_executor_job(
+                    load_people_index_diagnostics, media_path, photos
+                )
                 data["last_scan"] = summary["completed_at"]
                 data["last_summary"] = summary
                 data["scan_status"] = "success"
