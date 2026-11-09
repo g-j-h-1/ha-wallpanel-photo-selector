@@ -40,3 +40,7 @@ To prioritise photos of people recognised by your kiosk, copy an Immich name ind
 The index is optional; missing, malformed, or unmatched entries are ignored and the normal slideshow continues. The authenticated `wallpanel_photo_selector/photos` WebSocket response now includes `people` on each photo and `people_indexed` for diagnostics. The index is re-read whenever a kiosk requests the photo list. You must also enable `photo_selector_person_entity: input_text.portal_recognised_people` in the kiosk's `wallpanel:` configuration and install the corresponding updated kiosk release.
 
 **Important:** Photo names in the JSON must match the indexed filenames exactly, including directory prefixes and case. Keep this private mapping file in Home Assistant's media directory, not in a public GitHub repository.
+
+## Immich index diagnostic sensors (1.1.7)
+
+The integration device exposes **Immich index status**, **Immich index entries**, **Photos matched to people**, and **Immich entries unmatched**. These sensors update after a photo scan and whenever the kiosk requests the photo list. Status is `loaded`, `missing`, `error`, or `pending`; an error explanation is available in sensor attributes. The matched count is the same as the `people_indexed` value returned by the photo WebSocket API. Restart Home Assistant after updating through HACS to register the new sensors.
