@@ -25,3 +25,18 @@ The frontend is installed separately through HACS as a Dashboard component from 
 After restarting Home Assistant, open **Photo Library** in the sidebar. The read-only browser lists indexed JPEG filenames and their star ratings, with filters for **All**, **0–5 stars**, and **Errors**. Use the search box to find filenames or error messages. The Errors tab also lists unreadable JPEGs that could not be added to the index.
 
 The **Refresh list** button reloads the current index; to rescan the underlying directory, use the integration's **Rescan photos** button.
+
+## Optional Immich person-aware slideshow (1.1.6)
+
+To prioritise photos of people recognised by your kiosk, copy an Immich name index to `/media/PortalPhotos/immich-people.json` (or to the configured media directory). The JSON must map photo filenames **relative to that directory**, using forward slashes, to arrays of person names:
+
+```json
+{
+  "Holiday/IMG_0001.jpg": ["Person A"],
+  "IMG_0002.jpg": ["Person A", "Person B"]
+}
+```
+
+The index is optional; missing, malformed, or unmatched entries are ignored and the normal slideshow continues. The authenticated `wallpanel_photo_selector/photos` WebSocket response now includes `people` on each photo and `people_indexed` for diagnostics. The index is re-read whenever a kiosk requests the photo list. You must also enable `photo_selector_person_entity: input_text.portal_recognised_people` in the kiosk's `wallpanel:` configuration and install the corresponding updated kiosk release.
+
+**Important:** Photo names in the JSON must match the indexed filenames exactly, including directory prefixes and case. Keep this private mapping file in Home Assistant's media directory, not in a public GitHub repository.
