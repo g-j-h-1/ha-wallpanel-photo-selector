@@ -30,6 +30,31 @@ class PeopleIndexTests(unittest.TestCase):
                 {"a.jpg": ["Person B", "Person A"]},
             )
 
+    def test_diagnostics_count_matched_and_unmatched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "immich-people.json").write_text(json.dumps({
+                "a.jpg": ["Person A"],
+                "missing.jpg": ["Person B"],
+                "bad.jpg": [],
+            }), encoding="utf-8")
+            matched, stats = people_index.load_people_index_diagnostics(
+                root, {"a.jpg": {}, "b.jpg": {}}
+            )
+            self.assertEqual(matched, {"a.jpg": ["Person A"]})
+            self.assertEqual(stats["entries"], 2)
+            self.assertEqual(stats["matched"], 1)
+            self.assertEqual(stats["unmatched"], 1)
+            self.assertEqual(stats["status"], "loaded")
+
+    def test_missing_index_reports_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, stats = people_index.load_people_index_diagnostics(
+                Path(directory), {"a.jpg": {}}
+            )
+            self.assertEqual(stats["status"], "missing")
+            self.assertEqual(stats["matched"], 0)
+
     def test_invalid_json_falls_back_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
