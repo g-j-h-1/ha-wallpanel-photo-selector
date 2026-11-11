@@ -44,6 +44,39 @@ class ScannerTests(unittest.TestCase):
             path.write_bytes(jpeg(800, 1200, 4))
             self.assertEqual(_jpeg_metadata(path), (800, 1200, 4))
 
+    def test_windows_microsoftphoto_rating_is_ignored(self):
+        # Windows writes MicrosoftPhoto:Rating on a 0-99 scale (50 = 3 stars here,
+        # but 2 stars in xmp:Rating). Only xmp:Rating must be used.
+        packet = (
+            b'<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+            b'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+            b'<rdf:Description xmlns:MicrosoftPhoto="http://ns.microsoft.com/photo/1.0/"'
+            b' MicrosoftPhoto:Rating="25"/>'
+            b'<rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:Rating="2"/>'
+            b"</rdf:RDF></x:xmpmeta>"
+        )
+        self.assertEqual(SCANNER._extract_rating(packet), 2)
+
+    def test_microsoftphoto_rating_alone_is_unrated(self):
+        packet = (
+            b'<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+            b'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+            b'<rdf:Description xmlns:MicrosoftPhoto="http://ns.microsoft.com/photo/1.0/"'
+            b' MicrosoftPhoto:Rating="99"/>'
+            b"</rdf:RDF></x:xmpmeta>"
+        )
+        self.assertIsNone(SCANNER._extract_rating(packet))
+
+    def test_xmp_rating_element_form(self):
+        packet = (
+            b'<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+            b'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+            b'<rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/">'
+            b"<xmp:Rating>4</xmp:Rating></rdf:Description>"
+            b"</rdf:RDF></x:xmpmeta>"
+        )
+        self.assertEqual(SCANNER._extract_rating(packet), 4)
+
     def test_unrated_image_has_zero_rating(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "unrated.jpg"

@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components import websocket_api, panel_custom
+from homeassistant.components import frontend, panel_custom, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.event import async_track_time_interval
@@ -55,13 +55,14 @@ async def websocket_get_photos(hass: HomeAssistant, connection, msg) -> None:
     ]
     connection.send_result(msg["id"], {
         "photos": photos,
-        "media_folder": Path(data["media_path"]).name,
+        "media_folder": _media_folder(data["media_path"]),
         "last_scan": data.get("last_scan"),
         "people_indexed": len(people_index),
     })
 
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): WS_LIBRARY})
 @websocket_api.async_response
 async def websocket_photo_library(hass: HomeAssistant, connection, msg) -> None:
@@ -86,15 +87,24 @@ async def websocket_photo_library(hass: HomeAssistant, connection, msg) -> None:
         "unreadable": summary.get("unreadable", 0),
     })
 
+def _media_folder(media_path: str) -> str:
+    """Return the folder relative to /media as used in media-source URLs.
+
+    Nested folders such as /media/Family/Portal must be sent in full, otherwise
+    the frontend cannot match media-source URLs to indexed photos.
+    """
+    path = Path(media_path)
+    try:
+        relative = path.relative_to("/media").as_posix()
+        return "" if relative == "." else relative
+    except ValueError:
+        return path.name
+
+
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Register WebSocket API."""
+    """Register WebSocket API, static files and the admin panel once."""
     websocket_api.async_register_command(hass, websocket_get_photos)
     websocket_api.async_register_command(hass, websocket_photo_library)
-    return True
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up scanner and diagnostic entities."""
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/wallpanel-photo-selector/photo-library.js",
@@ -102,6 +112,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             cache_headers=False,
         )
     ])
+    return True
+
+
+async def _async_register_panel(hass: HomeAssistant) -> None:
+    """Register the Photo Library panel unless it is already present."""
+    if PANEL_PATH in hass.data.get("frontend_panels", {}):
+        return
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=PANEL_PATH,
@@ -111,6 +128,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sidebar_icon="mdi:image-multiple",
         require_admin=True,
     )
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up scanner and diagnostic entities."""
+    await _async_register_panel(hass)
     media_path = Path(entry.options.get("media_path", entry.data.get("media_path", DEFAULT_MEDIA_PATH))).resolve()
     interval = int(entry.options.get("scan_interval", entry.data.get("scan_interval", DEFAULT_SCAN_INTERVAL)))
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
@@ -164,6 +186,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register a Home Assistant interval listener rather than relying on a
     # perpetual sleeping task. HA owns the listener and removes it on unload.
+    # @callback keeps it on the event loop; without it HA runs the listener in a
+    # worker thread, where async_create_task is not allowed and scans never run.
+    @callback
     def _schedule_scan(_now=None) -> None:
         task = data.get("scan_task")
         if task is not None and not task.done():
@@ -190,12 +215,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload integration and diagnostic entities."""
-    entry.async_unload()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if data and data.get("scan_task"):
         data["scan_task"].cancel()
     if not hass.data.get(DOMAIN):
         hass.data.pop(DOMAIN, None)
-        panel_custom.async_remove_panel(hass, PANEL_PATH)
+        frontend.async_remove_panel(hass, PANEL_PATH)
     return unload_ok

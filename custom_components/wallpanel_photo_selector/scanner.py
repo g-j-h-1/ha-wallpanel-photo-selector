@@ -10,6 +10,7 @@ from typing import Any
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg"}
 XMP_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
+XMP_RATING = "{http://ns.adobe.com/xap/1.0/}Rating"
 SOF_MARKERS = {
     0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
     0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
@@ -73,14 +74,16 @@ def _extract_rating(packet: bytes) -> int | None:
     except ET.ParseError:
         match = re.search(rb'<(?:[A-Za-z0-9_-]+:)?Description\b[^>]*\bxmp:Rating=["\'](-?\d+)["\']', packet)
         return max(0, min(5, int(match.group(1)))) if match else None
+    # Only xmp:Rating (0-5). Windows also writes MicrosoftPhoto:Rating on a
+    # 0-99 scale, which must not be mistaken for a star rating.
     for element in root.iter():
-        for key, value in element.attrib.items():
-            if key.rsplit("}", 1)[-1] == "Rating":
-                try:
-                    return max(0, min(5, int(float(value))))
-                except (TypeError, ValueError):
-                    pass
-        if element.tag.rsplit("}", 1)[-1] == "Rating" and element.text:
+        value = element.attrib.get(XMP_RATING)
+        if value is not None:
+            try:
+                return max(0, min(5, int(float(value))))
+            except (TypeError, ValueError):
+                pass
+        if element.tag == XMP_RATING and element.text:
             try:
                 return max(0, min(5, int(float(element.text.strip()))))
             except (TypeError, ValueError):
